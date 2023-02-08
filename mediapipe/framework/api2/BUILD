@@ -1,13 +1,6 @@
 package(
-    default_visibility = [":preview_users"],
+    default_visibility = ["//visibility:public"],
     features = ["-use_header_modules"],
-)
-
-package_group(
-    name = "preview_users",
-    packages = [
-        "//mediapipe/...",
-    ],
 )
 
 licenses(["notice"])
@@ -43,7 +36,6 @@ cc_test(
         ":tag",
         ":test_contracts",
         "//mediapipe/framework:calculator_framework",
-        "//mediapipe/framework/deps:message_matchers",
         "//mediapipe/framework/port:gtest_main",
         "//mediapipe/framework/port:parse_text_proto",
         "@com_google_absl//absl/strings",
@@ -182,7 +174,6 @@ cc_test(
         ":port",
         ":test_contracts",
         "//mediapipe/framework:calculator_framework",
-        "//mediapipe/framework/deps:message_matchers",
         "//mediapipe/framework/port:gtest_main",
         "//mediapipe/framework/port:parse_text_proto",
         "//mediapipe/framework/tool:subgraph_expansion",

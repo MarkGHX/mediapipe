@@ -99,8 +99,11 @@ class InferenceCalculator : public NodeIntf {
       kSideInCustomOpResolver{"CUSTOM_OP_RESOLVER"};
   static constexpr SideInput<TfLiteModelPtr>::Optional kSideInModel{"MODEL"};
   static constexpr Output<std::vector<Tensor>> kOutTensors{"TENSORS"};
+  static constexpr SideInput<
+      mediapipe::InferenceCalculatorOptions::Delegate>::Optional kDelegate{
+      "DELEGATE"};
   MEDIAPIPE_NODE_CONTRACT(kInTensors, kSideInCustomOpResolver, kSideInModel,
-                          kOutTensors);
+                          kOutTensors, kDelegate);
 
  protected:
   using TfLiteDelegatePtr =
@@ -116,10 +119,6 @@ struct InferenceCalculatorSelector : public InferenceCalculator {
 
 struct InferenceCalculatorGl : public InferenceCalculator {
   static constexpr char kCalculatorName[] = "InferenceCalculatorGl";
-};
-
-struct InferenceCalculatorMlDrift : public InferenceCalculator {
-  static constexpr char kCalculatorName[] = "InferenceCalculatorMlDrift";
 };
 
 struct InferenceCalculatorMetal : public InferenceCalculator {

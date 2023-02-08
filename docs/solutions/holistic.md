@@ -135,18 +135,34 @@ another detection until it loses track, on reducing computation and latency. If
 set to `true`, person detection runs every input image, ideal for processing a
 batch of static, possibly unrelated, images. Default to `false`.
 
-#### upper_body_only
+#### model_complexity
 
-If set to `true`, the solution outputs only the 25 upper-body pose landmarks
-(535 in total) instead of the full set of 33 pose landmarks (543 in total). Note
-that upper-body-only prediction may be more accurate for use cases where the
-lower-body parts are mostly out of view. Default to `false`.
+Complexity of the pose landmark model: `0`, `1` or `2`. Landmark accuracy as
+well as inference latency generally go up with the model complexity. Default to
+`1`.
 
 #### smooth_landmarks
 
 If set to `true`, the solution filters pose landmarks across different input
 images to reduce jitter, but ignored if [static_image_mode](#static_image_mode)
 is also set to `true`. Default to `true`.
+
+#### enable_segmentation
+
+If set to `true`, in addition to the pose, face and hand landmarks the solution
+also generates the segmentation mask. Default to `false`.
+
+#### smooth_segmentation
+
+If set to `true`, the solution filters segmentation masks across different input
+images to reduce jitter. Ignored if [enable_segmentation](#enable_segmentation)
+is `false` or [static_image_mode](#static_image_mode) is `true`. Default to
+`true`.
+
+#### refine_face_landmarks
+
+Whether to further refine the landmark coordinates around the eyes and lips, and
+output additional landmarks around the irises. Default to `false`.
 
 #### min_detection_confidence
 
@@ -177,6 +193,16 @@ A list of pose landmarks. Each landmark consists of the following:
 *   `visibility`: A value in `[0.0, 1.0]` indicating the likelihood of the
     landmark being visible (present and not occluded) in the image.
 
+#### pose_world_landmarks
+
+Another list of pose landmarks in world coordinates. Each landmark consists of
+the following:
+
+*   `x`, `y` and `z`: Real-world 3D coordinates in meters with the origin at the
+    center between hips.
+*   `visibility`: Identical to that defined in the corresponding
+    [pose_landmarks](#pose_landmarks).
+
 #### face_landmarks
 
 A list of 468 face landmarks. Each landmark consists of `x`, `y` and `z`. `x`
@@ -198,17 +224,29 @@ the camera. The magnitude of `z` uses roughly the same scale as `x`.
 A list of 21 hand landmarks on the right hand, in the same representation as
 [left_hand_landmarks](#left_hand_landmarks).
 
+#### segmentation_mask
+
+The output segmentation mask, predicted only when
+[enable_segmentation](#enable_segmentation) is set to `true`. The mask has the
+same width and height as the input image, and contains values in `[0.0, 1.0]`
+where `1.0` and `0.0` indicate high certainty of a "human" and "background"
+pixel respectively. Please refer to the platform-specific usage examples below
+for usage details.
+
 ### Python Solution API
 
 Please first follow general [instructions](../getting_started/python.md) to
 install MediaPipe Python package, then learn more in the companion
-[Python Colab](#resources) and the following usage example.
+[Python Colab](#resources) and the usage example below.
 
 Supported configuration options:
 
 *   [static_image_mode](#static_image_mode)
-*   [upper_body_only](#upper_body_only)
+*   [model_complexity](#model_complexity)
 *   [smooth_landmarks](#smooth_landmarks)
+*   [enable_segmentation](#enable_segmentation)
+*   [smooth_segmentation](#smooth_segmentation)
+*   [refine_face_landmarks](#refine_face_landmarks)
 *   [min_detection_confidence](#min_detection_confidence)
 *   [min_tracking_confidence](#min_tracking_confidence)
 
@@ -216,11 +254,17 @@ Supported configuration options:
 import cv2
 import mediapipe as mp
 mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
 mp_holistic = mp.solutions.holistic
 
 # For static images:
-with mp_holistic.Holistic(static_image_mode=True) as holistic:
-  for idx, file in enumerate(file_list):
+IMAGE_FILES = []
+with mp_holistic.Holistic(
+    static_image_mode=True,
+    model_complexity=2,
+    enable_segmentation=True,
+    refine_face_landmarks=True) as holistic:
+  for idx, file in enumerate(IMAGE_FILES):
     image = cv2.imread(file)
     image_height, image_width, _ = image.shape
     # Convert the BGR image to RGB before processing.
@@ -232,19 +276,33 @@ with mp_holistic.Holistic(static_image_mode=True) as holistic:
           f'{results.pose_landmarks.landmark[mp_holistic.PoseLandmark.NOSE].x * image_width}, '
           f'{results.pose_landmarks.landmark[mp_holistic.PoseLandmark.NOSE].y * image_height})'
       )
-    # Draw pose, left and right hands, and face landmarks on the image.
+
     annotated_image = image.copy()
+    # Draw segmentation on the image.
+    # To improve segmentation around boundaries, consider applying a joint
+    # bilateral filter to "results.segmentation_mask" with "image".
+    condition = np.stack((results.segmentation_mask,) * 3, axis=-1) > 0.1
+    bg_image = np.zeros(image.shape, dtype=np.uint8)
+    bg_image[:] = BG_COLOR
+    annotated_image = np.where(condition, annotated_image, bg_image)
+    # Draw pose, left and right hands, and face landmarks on the image.
     mp_drawing.draw_landmarks(
-        annotated_image, results.face_landmarks, mp_holistic.FACE_CONNECTIONS)
+        annotated_image,
+        results.face_landmarks,
+        mp_holistic.FACEMESH_TESSELATION,
+        landmark_drawing_spec=None,
+        connection_drawing_spec=mp_drawing_styles
+        .get_default_face_mesh_tesselation_style())
     mp_drawing.draw_landmarks(
-        annotated_image, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
-    mp_drawing.draw_landmarks(
-        annotated_image, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
-    # Use mp_holistic.UPPER_BODY_POSE_CONNECTIONS for drawing below when
-    # upper_body_only is set to True.
-    mp_drawing.draw_landmarks(
-        annotated_image, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
+        annotated_image,
+        results.pose_landmarks,
+        mp_holistic.POSE_CONNECTIONS,
+        landmark_drawing_spec=mp_drawing_styles.
+        get_default_pose_landmarks_style())
     cv2.imwrite('/tmp/annotated_image' + str(idx) + '.png', annotated_image)
+    # Plot pose world landmarks.
+    mp_drawing.plot_landmarks(
+        results.pose_world_landmarks, mp_holistic.POSE_CONNECTIONS)
 
 # For webcam input:
 cap = cv2.VideoCapture(0)
@@ -258,26 +316,30 @@ with mp_holistic.Holistic(
       # If loading a video, use 'break' instead of 'continue'.
       continue
 
-    # Flip the image horizontally for a later selfie-view display, and convert
-    # the BGR image to RGB.
-    image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
     # To improve performance, optionally mark the image as not writeable to
     # pass by reference.
     image.flags.writeable = False
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     results = holistic.process(image)
 
     # Draw landmark annotation on the image.
     image.flags.writeable = True
     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     mp_drawing.draw_landmarks(
-        image, results.face_landmarks, mp_holistic.FACE_CONNECTIONS)
+        image,
+        results.face_landmarks,
+        mp_holistic.FACEMESH_CONTOURS,
+        landmark_drawing_spec=None,
+        connection_drawing_spec=mp_drawing_styles
+        .get_default_face_mesh_contours_style())
     mp_drawing.draw_landmarks(
-        image, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
-    mp_drawing.draw_landmarks(
-        image, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
-    mp_drawing.draw_landmarks(
-        image, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
-    cv2.imshow('MediaPipe Holistic', image)
+        image,
+        results.pose_landmarks,
+        mp_holistic.POSE_CONNECTIONS,
+        landmark_drawing_spec=mp_drawing_styles
+        .get_default_pose_landmarks_style())
+    # Flip the image horizontally for a selfie-view display.
+    cv2.imshow('MediaPipe Holistic', cv2.flip(image, 1))
     if cv2.waitKey(5) & 0xFF == 27:
       break
 cap.release()
@@ -291,8 +353,11 @@ and the following usage example.
 
 Supported configuration options:
 
-*   [upperBodyOnly](#upper_body_only)
+*   [modelComplexity](#model_complexity)
 *   [smoothLandmarks](#smooth_landmarks)
+*   [enableSegmentation](#enable_segmentation)
+*   [smoothSegmentation](#smooth_segmentation)
+*   [refineFaceLandmarks](#refineFaceLandmarks)
 *   [minDetectionConfidence](#min_detection_confidence)
 *   [minTrackingConfidence](#min_tracking_confidence)
 
@@ -325,8 +390,20 @@ const canvasCtx = canvasElement.getContext('2d');
 function onResults(results) {
   canvasCtx.save();
   canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+  canvasCtx.drawImage(results.segmentationMask, 0, 0,
+                      canvasElement.width, canvasElement.height);
+
+  // Only overwrite existing pixels.
+  canvasCtx.globalCompositeOperation = 'source-in';
+  canvasCtx.fillStyle = '#00FF00';
+  canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
+
+  // Only overwrite missing pixels.
+  canvasCtx.globalCompositeOperation = 'destination-atop';
   canvasCtx.drawImage(
       results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+  canvasCtx.globalCompositeOperation = 'source-over';
   drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS,
                  {color: '#00FF00', lineWidth: 4});
   drawLandmarks(canvasCtx, results.poseLandmarks,
@@ -348,8 +425,11 @@ const holistic = new Holistic({locateFile: (file) => {
   return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
 }});
 holistic.setOptions({
-  upperBodyOnly: false,
+  modelComplexity: 1,
   smoothLandmarks: true,
+  enableSegmentation: true,
+  smoothSegmentation: true,
+  refineFaceLandmarks: true,
   minDetectionConfidence: 0.5,
   minTrackingConfidence: 0.5
 });

@@ -53,7 +53,7 @@ enum { ATTRIB_VERTEX, ATTRIB_TEXTURE_POSITION, NUM_ATTRIBUTES };
 // The alpha channel can be set to a single value, or come from an image mask.
 // If the input image has an alpha channel, it will be updated.
 // If the input image doesn't have an alpha channel, one will be added.
-// Adding alpha channel to a Grayscale (single channel) input is not suported.
+// Adding alpha channel to a Grayscale (single channel) input is not supported.
 //
 // Inputs:
 //   One of the following two IMAGE tags:
@@ -323,7 +323,7 @@ absl::Status SetAlphaCalculator::RenderGpu(CalculatorContext* cc) {
     const auto& alpha_mask =
         cc->Inputs().Tag(kInputAlphaTagGpu).Get<mediapipe::GpuBuffer>();
     auto alpha_texture = gpu_helper_.CreateSourceTexture(alpha_mask);
-    gpu_helper_.BindFramebuffer(output_texture);  // GL_TEXTURE0
+    gpu_helper_.BindFramebuffer(output_texture);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, input_texture.name());
     glActiveTexture(GL_TEXTURE2);
@@ -335,7 +335,7 @@ absl::Status SetAlphaCalculator::RenderGpu(CalculatorContext* cc) {
     glBindTexture(GL_TEXTURE_2D, 0);
     alpha_texture.Release();
   } else {
-    gpu_helper_.BindFramebuffer(output_texture);  // GL_TEXTURE0
+    gpu_helper_.BindFramebuffer(output_texture);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, input_texture.name());
     GlRender(cc);  // use value from options

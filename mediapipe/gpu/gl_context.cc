@@ -222,6 +222,9 @@ bool GlContext::HasGlExtension(absl::string_view extension) const {
 // to work with GL_EXTENSIONS for newer GL versions, so we must maintain both
 // variations of this function.
 absl::Status GlContext::GetGlExtensions() {
+  // RET_CHECK logs by default, but here we just want to check the precondition;
+  // we'll fall back to the alternative implementation for older versions.
+  RET_CHECK(gl_major_version_ >= 3).SetNoLogging();
   gl_extensions_.clear();
   // glGetStringi only introduced in GL 3.0+; so we exit out this function if
   // we don't have that function defined, regardless of version number reported.
@@ -230,7 +233,7 @@ absl::Status GlContext::GetGlExtensions() {
   // sometimes provides this function, its default library implementation
   // appears to only provide glGetString, so we skip this for Emscripten
   // platforms to avoid possible undefined symbol or runtime errors.
-#if (GL_VERSION_3_0 || GL_ES_VERSION_3_0) && !defined(__EMSCRIPTEN__)
+#if (GL_VERSION_3_0 || GL_ES_VERSION_3_0)
   if (!SymbolAvailable(&glGetStringi)) {
     LOG(ERROR) << "GL major version > 3.0 indicated, but glGetStringi not "
                << "defined. Falling back to deprecated GL extensions querying "
@@ -255,7 +258,7 @@ absl::Status GlContext::GetGlExtensions() {
   return absl::OkStatus();
 #else
   return absl::InternalError("GL version mismatch in GlGetExtensions");
-#endif  // (GL_VERSION_3_0 || GL_ES_VERSION_3_0) && !defined(__EMSCRIPTEN__)
+#endif  // (GL_VERSION_3_0 || GL_ES_VERSION_3_0)
 }
 
 // Same as GetGlExtensions() above, but for pre-GL3.0, where glGetStringi did
@@ -330,13 +333,24 @@ absl::Status GlContext::FinishInitialization(bool create_thread) {
 
     LOG(INFO) << "GL version: " << gl_major_version_ << "." << gl_minor_version_
               << " (" << glGetString(GL_VERSION) << ")";
-    if (gl_major_version_ >= 3) {
+    {
       auto status = GetGlExtensions();
-      if (status.ok()) {
-        return absl::OkStatus();
+      if (!status.ok()) {
+        status = GetGlExtensionsCompat();
       }
+      MP_RETURN_IF_ERROR(status);
     }
-    return GetGlExtensionsCompat();
+
+#if GL_ES_VERSION_2_0  // This actually means "is GLES available".
+    // No linear float filtering by default, check extensions.
+    can_linear_filter_float_textures_ =
+        HasGlExtension("OES_texture_float_linear");
+#else
+    // Desktop GL should always allow linear filtering.
+    can_linear_filter_float_textures_ = true;
+#endif  // GL_ES_VERSION_2_0
+
+    return absl::OkStatus();
   });
 }
 
@@ -563,8 +577,14 @@ class GlFenceSyncPoint : public GlSyncPoint {
 
   void WaitOnGpu() override {
     if (!sync_) return;
-    // TODO: do not wait if we are already on the same context?
+      // TODO: do not wait if we are already on the same context?
+      // WebGL2 specifies a waitSync call, but since cross-context
+      // synchronization is not supported, it's actually a no-op. Firefox prints
+      // a warning when it's called, so let's just skip the call. See
+      // b/184637485 for details.
+#ifndef __EMSCRIPTEN__
     glWaitSync(sync_, 0, GL_TIMEOUT_IGNORED);
+#endif
   }
 
   bool IsReady() override {
@@ -782,7 +802,7 @@ bool GlContext::CheckForGlErrors() { return CheckForGlErrors(false); }
 bool GlContext::CheckForGlErrors(bool force) {
 #if UNSAFE_EMSCRIPTEN_SKIP_GL_ERROR_HANDLING
   if (!force) {
-    LOG_FIRST_N(WARNING, 1) << "MediaPipe OpenGL error checking is disabled";
+    LOG_FIRST_N(WARNING, 1) << "OpenGL error checking is disabled";
     return false;
   }
 #endif
@@ -833,6 +853,27 @@ const GlTextureInfo& GlTextureInfoForGpuBufferFormat(GpuBufferFormat format,
   std::shared_ptr<GlContext> ctx = GlContext::GetCurrent();
   CHECK(ctx != nullptr);
   return GlTextureInfoForGpuBufferFormat(format, plane, ctx->GetGlVersion());
+}
+
+void GlContext::SetStandardTextureParams(GLenum target, GLint internal_format) {
+  // Default to using linear filter everywhere. For float32 textures, fall back
+  // to GL_NEAREST if linear filtering unsupported.
+  GLint filter;
+  switch (internal_format) {
+    case GL_R32F:
+    case GL_RG32F:
+    case GL_RGBA32F:
+      // 32F (unlike 16f) textures do not always support texture filtering
+      // (According to OpenGL ES specification [TEXTURE IMAGE SPECIFICATION])
+      filter = can_linear_filter_float_textures_ ? GL_LINEAR : GL_NEAREST;
+      break;
+    default:
+      filter = GL_LINEAR;
+  }
+  glTexParameteri(target, GL_TEXTURE_MIN_FILTER, filter);
+  glTexParameteri(target, GL_TEXTURE_MAG_FILTER, filter);
+  glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
 }  // namespace mediapipe

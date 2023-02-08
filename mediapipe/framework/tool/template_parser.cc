@@ -37,7 +37,6 @@
 #include "mediapipe/framework/tool/proto_util_lite.h"
 
 using mediapipe::proto_ns::Descriptor;
-using mediapipe::proto_ns::DescriptorPool;
 using mediapipe::proto_ns::DynamicMessageFactory;
 using mediapipe::proto_ns::EnumDescriptor;
 using mediapipe::proto_ns::EnumValueDescriptor;
@@ -1683,8 +1682,8 @@ bool TemplateParser::Parser::Parse(io::ZeroCopyInputStream* input,
       allow_singular_overwrites_ ? ParserImpl::ALLOW_SINGULAR_OVERWRITES
                                  : ParserImpl::FORBID_SINGULAR_OVERWRITES;
 
-  bool allow_unknown_extension = true;
   int recursion_limit = std::numeric_limits<int>::max();
+  bool allow_unknown_extension = false;
   MediaPipeParserImpl parser(
       output->GetDescriptor(), input, error_collector_, finder_,
       parse_info_tree_, overwrites_policy, allow_case_insensitive_field_,
@@ -1702,8 +1701,8 @@ bool TemplateParser::Parser::ParseFromString(const std::string& input,
 
 bool TemplateParser::Parser::Merge(io::ZeroCopyInputStream* input,
                                    Message* output) {
-  bool allow_unknown_extension = true;
   int recursion_limit = std::numeric_limits<int>::max();
+  bool allow_unknown_extension = false;
   MediaPipeParserImpl parser(
       output->GetDescriptor(), input, error_collector_, finder_,
       parse_info_tree_, ParserImpl::ALLOW_SINGULAR_OVERWRITES,
@@ -1737,8 +1736,8 @@ bool TemplateParser::Parser::MergeUsingImpl(
 bool TemplateParser::Parser::ParseFieldValueFromString(
     const std::string& input, const FieldDescriptor* field, Message* output) {
   io::ArrayInputStream input_stream(input.data(), input.size());
-  bool allow_unknown_extension = true;
   int recursion_limit = std::numeric_limits<int>::max();
+  bool allow_unknown_extension = false;
   ParserImpl parser(
       output->GetDescriptor(), &input_stream, error_collector_, finder_,
       parse_info_tree_, ParserImpl::ALLOW_SINGULAR_OVERWRITES,

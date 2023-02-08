@@ -19,6 +19,12 @@ cc_library(
     srcs = ["util.cc"],
     hdrs = ["util.h"],
     features = ["-parse_headers"],
+    linkopts = [
+        "-framework Accelerate",
+        "-framework CoreFoundation",
+        "-framework CoreGraphics",
+        "-framework CoreVideo",
+    ],
     visibility = ["//mediapipe/framework:mediapipe_internal"],
     deps = [
         ":CFHolder",
@@ -69,6 +75,7 @@ objc_library(
         ":util",
         "//mediapipe/framework:calculator_framework",
         "//mediapipe/framework:mediapipe_profiling",
+        "//mediapipe/framework/formats:image",
         "//mediapipe/framework/port:map_util",
         "//mediapipe/framework/port:ret_check",
         "//mediapipe/framework/port:source_location",
@@ -218,6 +225,7 @@ objc_library(
     testonly = 1,
     srcs = [
         "CFHolderTests.mm",
+        "MPPDisplayLinkWeakTargetTests.mm",
         "MPPGraphTests.mm",
     ],
     copts = [
@@ -243,6 +251,7 @@ objc_library(
         ":MPPGraphTestBase",
         ":Weakify",
         ":mediapipe_framework_ios",
+        ":mediapipe_input_sources_ios",
         "//mediapipe/calculators/core:pass_through_calculator",
     ],
 )
