@@ -440,43 +440,43 @@ class GraphContainer {
         #}
 
         # Defines side packets for further use in the graph.
-        #node {
-        #  calculator: "ConstantSidePacketCalculator"
-        #  output_side_packet: "PACKET:num_faces"
-        #  node_options: {
-        #    [type.googleapis.com/mediapipe.ConstantSidePacketCalculatorOptions]: {
-        #      packet { int_value: 1 }
+        node {
+          calculator: "ConstantSidePacketCalculator"
+          output_side_packet: "PACKET:num_faces"
+          node_options: {
+            [type.googleapis.com/mediapipe.ConstantSidePacketCalculatorOptions]: {
+              packet { int_value: 1 }
+            }
+          }
+        }
+
+        #node: {
+        #  calculator: "ImageToTensorCalculator"
+        #  input_stream: "IMAGE:input_video"
+        #  output_stream: "TENSORS:input_video_tensor"
+        #  output_stream: "MATRIX:transform_matrix"
+        #  options: {
+        #    [mediapipe.ImageToTensorCalculatorOptions.ext] {
+        #      output_tensor_width: 128
+        #      output_tensor_height: 128
+        #      keep_aspect_ratio: true
+        #      output_tensor_float_range {
+        #        min: -1.0
+        #        max: 1.0
+        #      }
+        #      border_mode: BORDER_ZERO
         #    }
         #  }
         #}
-
-        node: {
-          calculator: "ImageFrameToTensorCalculator"
-          input_stream: "IMAGE_CPU:image"
-          output_stream: "TENSORS:face_detections"
-          output_stream: "MATRIX:transform_matrix"
-          options: {
-            [mediapipe.ImageToTensorCalculatorOptions.ext] {
-              output_tensor_width: 128
-              output_tensor_height: 128
-              keep_aspect_ratio: true
-              output_tensor_float_range {
-                min: -1.0
-                max: 1.0
-              }
-              border_mode: BORDER_ZERO
-            }
-          }
-}
         
       
         # Converts RGB images into luminance images, still stored in RGB format.
         # Subgraph that detects faces.
-        #node {
-        #  calculator: "FaceDetectionShortRangeCpu"
-        #  input_stream: "IMAGE:input_video"
-        #  output_stream: "DETECTIONS:face_detections"
-        #}
+        node {
+          calculator: "FaceDetectionShortRangeCpu"
+          input_stream: "IMAGE:input_video"
+          output_stream: "DETECTIONS:face_detections"
+        }
       )pb";
 
   // std::string graphConfigWithRender = R"pb(

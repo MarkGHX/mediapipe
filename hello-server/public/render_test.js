@@ -63,9 +63,10 @@ function runGraph(state, videoElem, Module) {
     
             Module.HEAPU8.set(rawData.data, state.imgPointer);
     
-            const ret = state.graph.runWithMask(state.imgPointer, state.imgPointer, state.imgSize);
+            const ret = state.graph.run(state.imgPointer, state.imgSize);
     
             if (state.graph.boundingBoxes.size() > 0) {
+                console.log()
             drawingUtils.drawRectangle(
                 canvasCtx, state.graph.boundingBoxes.get(0),
                 {color: 'blue', lineWidth: 4, fillColor: '#00000000'});
